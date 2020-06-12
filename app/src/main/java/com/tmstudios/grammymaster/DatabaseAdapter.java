@@ -1,15 +1,16 @@
 package com.tmstudios.grammymaster;
-import android.database.sqlite.*;
-import android.database.*;
 import android.content.*;
+import android.database.*;
+import android.database.sqlite.*;
 import android.util.*;
-import java.util.*;
 import java.io.*;
+import java.util.*;
+import java.util.ArrayList;
 
 public class DatabaseAdapter extends SQLiteOpenHelper
 {
 	private SQLiteDatabase db;
-	private static final String DATABASE_NAME="/awards.sqlite";
+	private static final String DATABASE_NAME="database.db";
 	private final String DATABASE_PATH;
 	private static final int DATABASE_VERSION = 1;
 	private static final String TABLE_NAME="awards";
@@ -20,24 +21,14 @@ public class DatabaseAdapter extends SQLiteOpenHelper
 		int year;
 		String award;
 		boolean winner;
-		ArrayList<Role> roles;
+		String nominee;
 	}
-	public static class Role
-	{
-		String type;
-		String winner;
-		public Role(String winner,String type){
-			this.winner = winner;
-			this.type = type;
-		}
-	}
+
 	public static class Condition{
 		int startYear=0;
 		int endYear=3000;
 		boolean winnersOnly=false;
 		String award = null;
-		String role = null;
-		String name = null;
 		String search = null;
 	}
 	private static DatabaseAdapter instance;
@@ -60,15 +51,15 @@ public class DatabaseAdapter extends SQLiteOpenHelper
 		boolean dbExist1 = checkDataBase();
 		if (!dbExist1)
 		{
-			this.getReadableDatabase();
+			//this.getReadableDatabase();
 			try
 			{
-				this.close();    
+				//this.close();    
 				copyDataBase();
 			}
 			catch (IOException e)
 			{
-				throw new Error("Error copying database");
+				throw new RuntimeException("Error copying database",e);
 			}
 		}
 
@@ -154,6 +145,7 @@ public class DatabaseAdapter extends SQLiteOpenHelper
 		try{
 			
 			createDatabase();
+			openDatabase();
 		}
 		catch(IOException e){
 			throw new RuntimeException(e);
@@ -177,22 +169,38 @@ public class DatabaseAdapter extends SQLiteOpenHelper
 	public ArrayList<Result> getAwardList(Condition cond){
 		return getAwardList(cond,0);
 	}
-	public ArrayList<Role> parseRoles(String names,String roles){
-		String[] a = roles.split(";");
-		String[] b = names.split(";");
-		ArrayList<Role> c = new ArrayList<Role>(a.length);
-		for(int i =0;i<a.length;i++){
-			c.add(new Role(b[i],i<a.length?a[i]:null));
-		}
-		return c;
-	}
+//	public ArrayList<Role> parseRoles(String names,String roles){
+//		String[] b = names.split(";");
+//		ArrayList<Role> c = new ArrayList<Role>(a.length);
+//		for(int i =0;i<a.length;i++){
+//			c.add(new Role(b[i],i<a.length?a[i]:null));
+//		}
+//		return c;
+//	}
 	public ArrayList<Result> getAwardList(Condition cond,int start){
-		
+		String where = "id >= ? AND year >= ? AND YEAR<= ?";
+		ArrayList<String> d = new ArrayList<String>();
+		d.add(start+"");
+		d.add(cond.startYear+"");
+		d.add(cond.endYear+"");
+		//d.add(String.format("(%d,%d)" ,cond.startYear,cond.endYear));
+		if(cond.award != null){
+		  where +=" AND award IS ?";
+		  d.add(cond.award);
+}
+        
+        if(cond.search != null){
+          where +=" AND names LIKE ?";
+          d.add(cond.search);
+        }
+		if(cond.winnersOnly){
+			where+="  AND winner IS True";
+		}
 		Cursor c = null;
 		ArrayList<Result> results = new ArrayList<Result>(50);
 		try
 		{
-			c = db.query(true, TABLE_NAME, new String[]{"award,year,name,role"},"key >= ? AND year BETWEEN ?", new String[]{start+"", String.format("(%d,%d)" ,cond.startYear,cond.endYear)}, null, null, null, "50");
+			c = db.query(true, TABLE_NAME, new String[]{"award,year,winner,names"},where, d.toArray(new String[]{}), null, null, null, "50");
 			c.moveToFirst();
 			for (int i=0;i < c.getCount();i++)
 			{
@@ -200,7 +208,7 @@ public class DatabaseAdapter extends SQLiteOpenHelper
 				a.award = c.getString(0);
 				a.year = c.getInt(1);
 				a.winner = c.getInt(2)>0;
-				a.roles = parseRoles(c.getString(3),c.getString(4));
+				a.nominee = c.getString(3);
 				results.add(a);
 				c.moveToNext();
 			}
@@ -211,7 +219,7 @@ public class DatabaseAdapter extends SQLiteOpenHelper
 			Log.e("exception", "", e);
 		}
 		
-		return null;
+		return results;
 
 	}
 
